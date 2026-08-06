@@ -1,0 +1,518 @@
+<div class="p2w-container" id="dropZone" tabindex="0" role="button" aria-label="Select or drop PDF files to convert to Word">
+    <div class="icon-box">📄</div>
+    <h2>PDF to Word Converter</h2>
+    <p>Convert one or more PDF files into editable Microsoft Word documents (.docx) — entirely in your browser.</p>
+
+    <input type="file" id="pdfFile" class="file-input" accept=".pdf,application/pdf" multiple>
+    <label for="pdfFile" class="upload-label" id="uploadLabel">Choose or Drop PDF File(s)</label>
+
+    <div class="options-panel" id="optionsPanel" style="display:none;">
+        <div class="options-grid">
+            <label class="option-row">
+                <input type="checkbox" id="detectHeadings" checked>
+                Detect headings (larger text → Word headings)
+            </label>
+            <label class="option-row">
+                <input type="checkbox" id="detectBold" checked>
+                Detect bold &amp; italic text
+            </label>
+            <label class="option-row">
+                <input type="checkbox" id="preserveSpacing" checked>
+                Preserve paragraph spacing
+            </label>
+            <label class="option-row">
+                <input type="checkbox" id="renderScannedPages" checked>
+                Insert page image for scanned pages (no selectable text)
+            </label>
+        </div>
+
+        <div class="btn-row">
+            <button id="convertAllBtn" class="action-btn-inline" type="button">Convert All to Word</button>
+            <button id="cancelBtn" class="secondary-btn danger-btn" type="button" style="display:none;">Cancel</button>
+            <button id="clearAllBtn" class="secondary-btn" type="button">Clear All</button>
+        </div>
+    </div>
+
+    <ul class="file-queue" id="fileQueue"></ul>
+
+    <div class="batch-summary" id="batchSummary" style="display:none;"></div>
+</div>
+
+<style>
+    #dropZone, #dropZone * { box-sizing: border-box; }
+    #dropZone {
+        --primary: #2563eb;
+        --primary-hover: #1d4ed8;
+        --dark: #0f172a;
+        --success: #059669;
+        --danger: #dc2626;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        background: #ffffff;
+        border: 2px dashed #cbd5e1;
+        border-radius: 16px;
+        padding: 40px;
+        text-align: center;
+        transition: border-color 0.3s ease, background 0.3s ease;
+        outline: none;
+    }
+    #dropZone:hover, #dropZone:focus-visible { border-color: var(--primary); background: #f8fafc; }
+    #dropZone.dragover { border-color: var(--primary); background: #eff6ff; }
+    #dropZone .icon-box { font-size: 50px; color: #ef4444; margin-bottom: 20px; }
+    #dropZone h2 { color: var(--dark); margin: 0 0 10px; font-size: 24px; }
+    #dropZone p { color: #64748b; margin: 0 0 25px; }
+    #dropZone .file-input { display: none; }
+    #dropZone .upload-label {
+        display: inline-block; background: var(--primary); color: white;
+        padding: 15px 35px; border-radius: 8px; font-weight: 700;
+        cursor: pointer; transition: background 0.2s;
+    }
+    #dropZone .upload-label:hover { background: var(--primary-hover); }
+
+    #dropZone .options-panel {
+        margin-top: 24px; text-align: left; background: #f8fafc; border: 1px solid #e2e8f0;
+        border-radius: 12px; padding: 18px;
+    }
+    #dropZone .options-grid { display: grid; grid-template-columns: 1fr; gap: 4px; }
+    #dropZone .option-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #334155; margin-bottom: 10px; cursor: pointer; }
+    #dropZone .option-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); flex-shrink: 0; }
+
+    #dropZone .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+    #dropZone .secondary-btn { flex: 1 1 auto; background: var(--dark); color: #fff; border: none; padding: 12px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px; transition: opacity 0.2s; min-width: 140px; }
+    #dropZone .secondary-btn:hover { opacity: 0.85; }
+    #dropZone .secondary-btn.danger-btn { background: var(--danger); }
+    #dropZone .action-btn-inline {
+        flex: 2 1 auto; background: var(--primary); color: #fff; border: none; padding: 14px 18px;
+        border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 15px; min-width: 180px; transition: background 0.2s;
+    }
+    #dropZone .action-btn-inline:hover:not(:disabled) { background: var(--primary-hover); }
+    #dropZone .action-btn-inline:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    #dropZone .file-queue { list-style: none; margin: 20px 0 0; padding: 0; text-align: left; }
+    #dropZone .file-item {
+        display: flex; flex-direction: column; gap: 8px;
+        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 12px 14px; margin-bottom: 10px;
+    }
+    #dropZone .file-item-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    #dropZone .file-item-name { font-size: 13px; font-weight: 700; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    #dropZone .file-item-meta { font-size: 12px; color: #64748b; white-space: nowrap; }
+    #dropZone .file-item-remove { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; }
+    #dropZone .file-item-remove:hover { color: var(--danger); }
+    #dropZone .file-item-warning { font-size: 12px; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 6px 10px; }
+    #dropZone .progress-bar { height: 7px; width: 100%; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+    #dropZone .progress-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.25s; }
+    #dropZone .file-item-status { font-size: 12px; color: #475569; }
+    #dropZone .file-item-status.done { color: var(--success); font-weight: 700; }
+    #dropZone .file-item-status.error { color: var(--danger); font-weight: 700; }
+    #dropZone .file-item-download {
+        display: inline-block; color: #fff; background: var(--success);
+        text-decoration: none; font-weight: 700; font-size: 12px; text-align: center;
+        padding: 8px 14px; border-radius: 6px; align-self: flex-start;
+    }
+    #dropZone .file-item-download:hover { opacity: 0.9; }
+
+    #dropZone .batch-summary { margin-top: 16px; font-size: 13px; font-weight: 700; color: var(--dark); text-align: center; }
+
+    @media (min-width: 640px) {
+        #dropZone .options-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+        #dropZone { padding: 24px 18px; }
+        #dropZone .icon-box { font-size: 38px; }
+        #dropZone .btn-row { flex-direction: column; }
+        #dropZone .secondary-btn, #dropZone .action-btn-inline { width: 100%; min-width: 0; }
+        #dropZone .file-item-top { flex-wrap: wrap; }
+    }
+</style>
+
+<script src="https://unpkg.com/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+
+<script>
+(function() {
+    "use strict";
+
+    if (window.pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@2.16.105/build/pdf.worker.min.js";
+    }
+
+    const LARGE_FILE_WARNING_BYTES = 25 * 1024 * 1024; // 25 MB
+
+    const wrapper = document.getElementById('dropZone');
+    const fileInput = document.getElementById('pdfFile');
+    const uploadLabel = document.getElementById('uploadLabel');
+    const optionsPanel = document.getElementById('optionsPanel');
+    const detectHeadings = document.getElementById('detectHeadings');
+    const detectBold = document.getElementById('detectBold');
+    const preserveSpacing = document.getElementById('preserveSpacing');
+    const renderScannedPages = document.getElementById('renderScannedPages');
+    const convertAllBtn = document.getElementById('convertAllBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const fileQueue = document.getElementById('fileQueue');
+    const batchSummary = document.getElementById('batchSummary');
+
+    let queue = []; // { id, file, li, elements: {...}, status, url, pageCount }
+    let idCounter = 0;
+    let cancelRequested = false;
+    let isConverting = false;
+
+    function formatSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function sanitizeName(name) {
+        let n = (name || 'converted_document').trim().replace(/[\\/:*?"<>|]/g, '').replace(/\.docx$/i, '');
+        return n || 'converted_document';
+    }
+
+    function buildQueueItem(file) {
+        const id = 'p2w-item-' + (idCounter++);
+        const li = document.createElement('li');
+        li.className = 'file-item';
+        li.id = id;
+
+        const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+        const isLarge = file.size > LARGE_FILE_WARNING_BYTES;
+
+        li.innerHTML =
+            '<div class="file-item-top">' +
+                '<span class="file-item-name">' + escapeHtml(file.name) + '</span>' +
+                '<span class="file-item-meta">' + formatSize(file.size) + '</span>' +
+                '<button type="button" class="file-item-remove" aria-label="Remove file">✕</button>' +
+            '</div>' +
+            (!isPdf ? '<div class="file-item-warning">Not a PDF file — this will be skipped.</div>' : '') +
+            (isPdf && isLarge ? '<div class="file-item-warning">Large file — conversion may take a while in your browser.</div>' : '') +
+            '<div class="progress-bar"><div class="progress-fill"></div></div>' +
+            '<div class="file-item-status">' + (isPdf ? 'Ready to convert' : 'Skipped (not a PDF)') + '</div>';
+
+        const item = {
+            id, file, li, isPdf,
+            progressFill: li.querySelector('.progress-fill'),
+            statusEl: li.querySelector('.file-item-status'),
+            removeBtn: li.querySelector('.file-item-remove'),
+            status: isPdf ? 'ready' : 'skipped',
+            url: null,
+            pageCount: null
+        };
+
+        item.removeBtn.addEventListener('click', () => removeItem(item));
+        return item;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function removeItem(item) {
+        if (item.url) URL.revokeObjectURL(item.url);
+        item.li.remove();
+        queue = queue.filter(q => q.id !== item.id);
+        updateUIState();
+    }
+
+    function updateUIState() {
+        const hasFiles = queue.length > 0;
+        optionsPanel.style.display = hasFiles ? 'block' : 'none';
+        if (!hasFiles) batchSummary.style.display = 'none';
+    }
+
+    async function addFiles(fileList) {
+        const files = Array.from(fileList);
+        for (const file of files) {
+            const item = buildQueueItem(file);
+            queue.push(item);
+            fileQueue.appendChild(item.li);
+
+            if (item.isPdf) {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    item.pageCount = pdf.numPages;
+                    item.statusEl.textContent = pdf.numPages + ' page(s) — ready to convert';
+                } catch (err) {
+                    item.status = 'error';
+                    item.statusEl.textContent = 'Could not read this PDF (corrupted or password-protected)';
+                    item.statusEl.classList.add('error');
+                }
+            }
+        }
+        updateUIState();
+    }
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) addFiles(e.target.files);
+        fileInput.value = '';
+    });
+
+    ['dragenter', 'dragover'].forEach(evt => {
+        wrapper.addEventListener(evt, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            wrapper.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'dragend'].forEach(evt => {
+        wrapper.addEventListener(evt, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            wrapper.classList.remove('dragover');
+        });
+    });
+    wrapper.addEventListener('drop', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        wrapper.classList.remove('dragover');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            addFiles(e.dataTransfer.files);
+        }
+    });
+    wrapper.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === wrapper) {
+            e.preventDefault();
+            fileInput.click();
+        }
+    });
+    ['dragover', 'drop'].forEach(evt => {
+        window.addEventListener(evt, (e) => {
+            if (!wrapper.contains(e.target) && e.target !== wrapper) return;
+            e.preventDefault();
+        });
+    });
+
+    async function pageToPngBytes(page, scale) {
+        const viewport = page.getViewport({ scale: scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        const dataUrl = canvas.toDataURL('image/png');
+        const bytes = await (await fetch(dataUrl)).arrayBuffer();
+        const dims = { width: viewport.width, height: viewport.height };
+        canvas.width = 0; canvas.height = 0;
+        return { bytes, dims };
+    }
+
+    function isBoldFont(fontName) {
+        return /bold|black|heavy/i.test(fontName || '');
+    }
+    function isItalicFont(fontName) {
+        return /italic|oblique/i.test(fontName || '');
+    }
+
+    async function convertPdfToDocx(arrayBuffer, options, onProgress) {
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const numPages = pdf.numPages;
+        const children = [];
+        const allHeights = [];
+        const pagesData = [];
+
+        for (let i = 1; i <= numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const items = textContent.items;
+
+            const lines = [];
+            let currentLine = [];
+            let lastY = null;
+            const yTolerance = 3;
+
+            items.forEach(item => {
+                const y = item.transform[5];
+                if (lastY === null || Math.abs(y - lastY) > yTolerance) {
+                    if (currentLine.length) lines.push(currentLine);
+                    currentLine = [item];
+                    lastY = y;
+                } else {
+                    currentLine.push(item);
+                }
+            });
+            if (currentLine.length) lines.push(currentLine);
+
+            lines.forEach(line => {
+                line.sort((a, b) => a.transform[4] - b.transform[4]);
+                const height = line[0].height || Math.abs(line[0].transform[3]) || 12;
+                allHeights.push(height);
+            });
+
+            pagesData.push({ page, lines, hasText: lines.length > 0 });
+        }
+
+        allHeights.sort((a, b) => a - b);
+        const medianHeight = allHeights.length ? allHeights[Math.floor(allHeights.length / 2)] : 12;
+
+        for (let i = 0; i < pagesData.length; i++) {
+            const { page, lines, hasText } = pagesData[i];
+
+            if (!hasText && options.renderScanned) {
+                const { bytes, dims } = await pageToPngBytes(page, 1.4);
+                const maxWidthPt = 550;
+                const ratio = dims.height / dims.width;
+                const widthPt = Math.min(maxWidthPt, dims.width * 0.75);
+                const heightPt = widthPt * ratio;
+
+                children.push(new docx.Paragraph({
+                    children: [
+                        new docx.ImageRun({
+                            data: bytes,
+                            type: "png",
+                            transformation: { width: widthPt, height: heightPt }
+                        })
+                    ]
+                }));
+            } else {
+                let lastLineY = null;
+                let lastLineHeight = medianHeight;
+
+                lines.forEach(line => {
+                    const text = line.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+                    const y = line[0].transform[5];
+                    const height = line[0].height || Math.abs(line[0].transform[3]) || 12;
+
+                    if (options.preserveSpacing && lastLineY !== null) {
+                        const gap = Math.abs(lastLineY - y);
+                        if (gap > lastLineHeight * 1.9 && text) {
+                            children.push(new docx.Paragraph({ children: [] }));
+                        }
+                    }
+                    lastLineY = y;
+                    lastLineHeight = height;
+
+                    if (!text) return;
+
+                    const isHeading = options.detectHeadings && height >= medianHeight * 1.3;
+
+                    if (isHeading) {
+                        children.push(new docx.Paragraph({
+                            text: text,
+                            heading: docx.HeadingLevel.HEADING_1
+                        }));
+                    } else if (options.detectBold) {
+                        const bold = isBoldFont(line[0].fontName);
+                        const italics = isItalicFont(line[0].fontName);
+                        children.push(new docx.Paragraph({
+                            children: [new docx.TextRun({ text: text, bold: bold, italics: italics })]
+                        }));
+                    } else {
+                        children.push(new docx.Paragraph({
+                            children: [new docx.TextRun(text)]
+                        }));
+                    }
+                });
+
+                if (lines.length === 0) {
+                    children.push(new docx.Paragraph({ children: [] }));
+                }
+            }
+
+            if (i < pagesData.length - 1) {
+                children.push(new docx.Paragraph({ children: [], pageBreakBefore: true }));
+            }
+
+            onProgress(i + 1, pagesData.length);
+        }
+
+        const doc = new docx.Document({
+            sections: [{ children: children.length ? children : [new docx.Paragraph('')] }]
+        });
+
+        return docx.Packer.toBlob(doc);
+    }
+
+    async function convertOne(item, options) {
+        item.status = 'converting';
+        item.statusEl.classList.remove('error', 'done');
+        item.statusEl.textContent = 'Starting…';
+
+        try {
+            const arrayBuffer = await item.file.arrayBuffer();
+            const blob = await convertPdfToDocx(arrayBuffer, options, (done, total) => {
+                const pct = Math.round((done / total) * 100);
+                item.progressFill.style.width = pct + '%';
+                item.statusEl.textContent = 'Page ' + done + ' of ' + total + ' (' + pct + '%)';
+            });
+
+            if (item.url) URL.revokeObjectURL(item.url);
+            const url = URL.createObjectURL(blob);
+            item.url = url;
+
+            const outName = sanitizeName(item.file.name.replace(/\.pdf$/i, ''));
+            let existingLink = item.li.querySelector('.file-item-download');
+            if (!existingLink) {
+                existingLink = document.createElement('a');
+                existingLink.className = 'file-item-download';
+                item.li.appendChild(existingLink);
+            }
+            existingLink.href = url;
+            existingLink.download = outName + '.docx';
+            existingLink.textContent = 'Download ' + outName + '.docx (' + formatSize(blob.size) + ')';
+
+            item.status = 'done';
+            item.statusEl.textContent = 'Conversion complete';
+            item.statusEl.classList.add('done');
+        } catch (err) {
+            console.error(err);
+            item.status = 'error';
+            item.statusEl.textContent = 'Error: could not convert (corrupted or password-protected PDF?)';
+            item.statusEl.classList.add('error');
+        }
+    }
+
+    convertAllBtn.addEventListener('click', async () => {
+        const convertible = queue.filter(q => q.isPdf && q.status !== 'error');
+        if (convertible.length === 0) return;
+
+        isConverting = true;
+        cancelRequested = false;
+        convertAllBtn.disabled = true;
+        cancelBtn.style.display = 'inline-block';
+        clearAllBtn.disabled = true;
+        batchSummary.style.display = 'block';
+
+        const options = {
+            detectHeadings: detectHeadings.checked,
+            detectBold: detectBold.checked,
+            preserveSpacing: preserveSpacing.checked,
+            renderScanned: renderScannedPages.checked
+        };
+
+        let done = 0;
+        for (const item of convertible) {
+            if (cancelRequested) break;
+            batchSummary.textContent = 'Converting ' + (done + 1) + ' of ' + convertible.length + '…';
+            await convertOne(item, options);
+            done++;
+        }
+
+        batchSummary.textContent = cancelRequested
+            ? 'Cancelled — ' + done + ' of ' + convertible.length + ' file(s) converted.'
+            : done + ' of ' + convertible.length + ' file(s) converted.';
+
+        isConverting = false;
+        convertAllBtn.disabled = false;
+        cancelBtn.style.display = 'none';
+        clearAllBtn.disabled = false;
+    });
+
+    cancelBtn.addEventListener('click', () => {
+        cancelRequested = true;
+        cancelBtn.disabled = true;
+        setTimeout(() => { cancelBtn.disabled = false; }, 500);
+    });
+
+    clearAllBtn.addEventListener('click', () => {
+        if (isConverting) return;
+        queue.forEach(item => { if (item.url) URL.revokeObjectURL(item.url); });
+        queue = [];
+        fileQueue.innerHTML = '';
+        batchSummary.style.display = 'none';
+        uploadLabel.innerText = 'Choose or Drop PDF File(s)';
+        updateUIState();
+    });
+})();
+</script>
